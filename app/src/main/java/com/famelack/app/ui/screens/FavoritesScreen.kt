@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -83,29 +83,31 @@ fun FavoritesScreen(onPlay: (Channel) -> Unit) {
             }
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
-                items(channels, key = { "fav-${it.id}" }) { ch ->
-                    ChannelRow(
-                        channel = ch,
-                        isFavorite = true,
-                        onClick = {
-                            if (ch.isYoutubeOnly) {
-                                onPlay(ch)
-                            } else {
-                                val url = ch.primaryUrl ?: return@ChannelRow
-                                PlayerHolder.playStream(
-                                    context = app,
-                                    url = url,
-                                    title = ch.name,
-                                    channel = ch
-                                )
-                                onPlay(ch)
+                itemsIndexed(channels, key = { _, ch -> "fav-${ch.id}" }) { _, ch ->
+                    TvAwareItem {
+                        ChannelRow(
+                            channel = ch,
+                            isFavorite = true,
+                            onClick = {
+                                if (ch.isYoutubeOnly) {
+                                    onPlay(ch)
+                                } else {
+                                    val url = ch.primaryUrl ?: return@ChannelRow
+                                    PlayerHolder.playStream(
+                                        context = app,
+                                        url = url,
+                                        title = ch.name,
+                                        channel = ch
+                                    )
+                                    onPlay(ch)
+                                }
+                            },
+                            onFavoriteToggle = {
+                                scope.launch { app.favoritesStore.toggle(ch.id) }
                             }
-                        },
-                        onFavoriteToggle = {
-                            scope.launch { app.favoritesStore.toggle(ch.id) }
-                        }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    }
                 }
             }
         }

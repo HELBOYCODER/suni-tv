@@ -40,10 +40,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Dp
 import androidx.core.net.toUri
+import com.famelack.app.ui.TvMode
 
 class WelcomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Android TV: a remote cannot comfortably dismiss the promo — go straight to the app
+        if (TvMode.isTvMode(this)) {
+            WelcomePrefs.markDone(this)
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
+        }
 
         // If user already completed welcome, skip straight to the app
         if (WelcomePrefs.isDone(this)) {

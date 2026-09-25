@@ -1,7 +1,9 @@
 package com.famelack.app.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,10 +47,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -59,7 +68,30 @@ import com.famelack.app.data.CountryInfo
 import com.famelack.app.data.MediaKind
 import com.famelack.app.data.codeToFlag
 import com.famelack.app.player.PlayerHolder
+import com.famelack.app.ui.LocalIsTv
 import com.famelack.app.ui.components.ChannelRow
+import kotlinx.coroutines.launch
+
+/**
+ * Wraps a focusable list row so that when the D-pad moves focus onto it (or one of
+ * its children) the row is scrolled fully into view inside the LazyColumn.
+ * Required on Android TV where partially-visible rows would otherwise be skipped.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun TvAwareItem(content: @Composable () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val bringIntoView = remember { BringIntoViewRequester() }
+    Box(
+        modifier = Modifier
+            .bringIntoViewRequester(bringIntoView)
+            .onFocusEvent { state ->
+                if (state.hasFocus) scope.launch { bringIntoView.bringIntoView() }
+            }
+    ) {
+        content()
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +99,7 @@ fun BrowseScreen(
     kind: MediaKind,
     onPlay: (Channel) -> Unit
 ) {
+    val isTv = LocalIsTv.current
     val repo = FamelackApp.instance.repository
     var loaded by remember { mutableStateOf(repo.let { false }) }
     var countries by remember { mutableStateOf<List<CountryInfo>>(emptyList()) }
@@ -74,6 +107,13 @@ fun BrowseScreen(
     var channels by remember { mutableStateOf<List<Channel>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<Channel>>(emptyList()) }
+
+    // TV: when the visible list changes, hand initial focus to its first row so the
+    // remote user never has to "hunt" for the focus target after navigating.
+    val listFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(loaded, kind, selectedCountry, channels, searchResults) {
+        if (isTv) runCatching { listFocusRequester.requestFocus() }
+    }
 
     LaunchedEffect(kind) {
         repo.ensureLoaded()
@@ -146,25 +186,32 @@ fun BrowseScreen(
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(searchResults, key = { "s-${it.id}" }) { ch ->
-                        ChannelRow(
-                            channel = ch,
-                            onClick = {
-                                if (ch.isYoutubeOnly) {
-                                    onPlay(ch)
+                    itemsIndexed(searchResults, key = { _, ch -> "s-${ch.id}" }) { index, ch ->
+                        TvAwareItem {
+                            ChannelRow(
+                                modifier = if (index == 0 && isTv) {
+                                    Modifier.focusRequester(listFocusRequester)
                                 } else {
-                                    val url = ch.primaryUrl ?: return@ChannelRow
-                                    PlayerHolder.playStream(
-                                        context = FamelackApp.instance,
-                                        url = url,
-                                        title = ch.name,
-                                        channel = ch
-                                    )
-                                    onPlay(ch)
+                                    Modifier
+                                },
+                                channel = ch,
+                                onClick = {
+                                    if (ch.isYoutubeOnly) {
+                                        onPlay(ch)
+                                    } else {
+                                        val url = ch.primaryUrl ?: return@ChannelRow
+                                        PlayerHolder.playStream(
+                                            context = FamelackApp.instance,
+                                            url = url,
+                                            title = ch.name,
+                                            channel = ch
+                                        )
+                                        onPlay(ch)
+                                    }
                                 }
-                            }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        }
                     }
                 }
             }
@@ -217,12 +264,19 @@ fun BrowseScreen(
                 )
             }
             LazyColumn(Modifier.fillMaxSize()) {
-                items(countries, key = { it.code }) { c ->
-                    CountryRow(
-                        info = c,
-                        onClick = { selectedCountry = c }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                itemsIndexed(countries, key = { _, c -> c.code }) { index, c ->
+                    TvAwareItem {
+                        CountryRow(
+                            modifier = if (index == 0 && isTv) {
+                                Modifier.focusRequester(listFocusRequester)
+                            } else {
+                                Modifier
+                            },
+                            info = c,
+                            onClick = { selectedCountry = c }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    }
                 }
             }
         } else {
@@ -255,25 +309,32 @@ fun BrowseScreen(
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(channels, key = { "c-${it.id}" }) { ch ->
-                        ChannelRow(
-                            channel = ch,
-                            onClick = {
-                                if (ch.isYoutubeOnly) {
-                                    onPlay(ch)
+                    itemsIndexed(channels, key = { _, ch -> "c-${ch.id}" }) { index, ch ->
+                        TvAwareItem {
+                            ChannelRow(
+                                modifier = if (index == 0 && isTv) {
+                                    Modifier.focusRequester(listFocusRequester)
                                 } else {
-                                    val url = ch.primaryUrl ?: return@ChannelRow
-                                    PlayerHolder.playStream(
-                                        context = FamelackApp.instance,
-                                        url = url,
-                                        title = ch.name,
-                                        channel = ch
-                                    )
-                                    onPlay(ch)
+                                    Modifier
+                                },
+                                channel = ch,
+                                onClick = {
+                                    if (ch.isYoutubeOnly) {
+                                        onPlay(ch)
+                                    } else {
+                                        val url = ch.primaryUrl ?: return@ChannelRow
+                                        PlayerHolder.playStream(
+                                            context = FamelackApp.instance,
+                                            url = url,
+                                            title = ch.name,
+                                            channel = ch
+                                        )
+                                        onPlay(ch)
+                                    }
                                 }
-                            }
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        }
                     }
                 }
             }
@@ -282,11 +343,26 @@ fun BrowseScreen(
 }
 
 @Composable
-private fun CountryRow(info: CountryInfo, onClick: () -> Unit) {
+private fun CountryRow(
+    info: CountryInfo,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            .scale(if (focused) 1.02f else 1f)
+            .background(
+                if (focused) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                else MaterialTheme.colorScheme.background
+            )
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .onFocusEvent { focused = it.isFocused }
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically

@@ -19,6 +19,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,7 +84,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +98,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.session.MediaController
 import androidx.media3.ui.PlayerView
 import com.famelack.app.FamelackApp
@@ -100,6 +108,7 @@ import com.famelack.app.player.PlayerHolder
 import com.famelack.app.player.ProxyConfig
 import com.famelack.app.player.StreamQuality
 import com.famelack.app.player.WebViewProxyManager
+import com.famelack.app.ui.LocalIsTv
 import com.famelack.app.ui.components.ProxySettingsDialog
 import kotlinx.coroutines.launch
 
@@ -112,6 +121,34 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
+/**
+ * D-pad fallback for the Player surface on Android TV:
+ * center = play/pause, left/right = seek +/-15s for non-live streams.
+ * Consuming here guarantees the remote controls playback even when the
+ * PlayerView controller does not receive the key natively.
+ */
+private fun handleTvPlayerKey(event: KeyEvent, controller: MediaController?): Boolean {
+    if (event.type != KeyEventType.KeyUp) return false
+    return when (event.key) {
+        Key.DirectionCenter -> {
+            PlayerHolder.togglePlayPause()
+            true
+        }
+        Key.DirectionLeft, Key.DirectionRight -> runCatching {
+            val c = controller ?: return@runCatching false
+            val duration = c.duration
+            if (duration != C.TIME_UNSET && duration > 0 && !c.isCurrentMediaItemLive) {
+                val delta = if (event.key == Key.DirectionLeft) -15_000L else 15_000L
+                c.seekTo((c.currentPosition + delta).coerceIn(0L, duration))
+                true
+            } else {
+                false
+            }
+        }.getOrDefault(false)
+        else -> false
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
@@ -119,6 +156,7 @@ fun PlayerScreen(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
+    val isTv = LocalIsTv.current
     val scope = rememberCoroutineScope()
     val app = FamelackApp.instance
     val activity = remember(context) { context.findActivity() }
@@ -205,6 +243,14 @@ fun PlayerScreen(
         }
     }
 
+    // YouTube inside a WebView is unusable with a D-pad — on TV hand playback off
+    // to the YouTube (TV) app directly; the in-app button remains as fallback.
+    LaunchedEffect(channel.id, isTv) {
+        if (isTv && channel.isYoutubeOnly && channel.youtubeId != null) {
+            launchYouTubeApp()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -217,6 +263,8 @@ fun PlayerScreen(
                 showYoutubeMode = showYoutubeMode,
                 controller = controller,
                 isLandscape = true,
+                isTv = isTv,
+                onOpenExternalYoutube = { launchYouTubeApp() },
                 onToggleOrientation = { toggleOrientation() },
                 onBack = { toggleOrientation() },
                 modifier = Modifier.fillMaxSize()
@@ -275,6 +323,8 @@ fun PlayerScreen(
                     showYoutubeMode = showYoutubeMode,
                     controller = controller,
                     isLandscape = false,
+                    isTv = isTv,
+                    onOpenExternalYoutube = { launchYouTubeApp() },
                     onToggleOrientation = { toggleOrientation() },
                     onBack = onClose,
                     modifier = Modifier
@@ -672,17 +722,60 @@ private fun VideoBox(
     showYoutubeMode: Boolean,
     controller: MediaController?,
     isLandscape: Boolean,
+    isTv: Boolean,
+    onOpenExternalYoutube: () -> Unit,
     onToggleOrientation: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val playerFocus = remember { FocusRequester() }
+    if (isTv && !showYoutubeMode && channel.hasStreams) {
+        // Hand D-pad focus to the player surface so the remote controls playback
+        LaunchedEffect(controller) { runCatching { playerFocus.requestFocus() } }
+    }
 
     Box(
         modifier = modifier.background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         when {
+            showYoutubeMode && channel.youtubeId != null && isTv -> {
+                // YouTube via WebView is degraded on TV — deep-link to the YouTube app instead
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "پخش یوتیوب در تلویزیون با کنترل داخلی محدود است",
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onOpenExternalYoutube,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Open in YouTube app", color = Color.White, fontSize = 14.sp)
+                    }
+                }
+            }
+
             showYoutubeMode && channel.youtubeId != null -> {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
@@ -757,11 +850,26 @@ private fun VideoBox(
 
             channel.hasStreams -> {
                 AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .let { m ->
+                            if (isTv) {
+                                m.focusRequester(playerFocus)
+                                    .focusable()
+                                    .onPreviewKeyEvent { handleTvPlayerKey(it, controller) }
+                            } else {
+                                m
+                            }
+                        },
                     factory = { ctx ->
                         PlayerView(ctx).apply {
                             useController = true
                             setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+                            if (isTv) {
+                                // Accept D-pad focus/key events from the interop view on Android TV
+                                isFocusable = true
+                                isFocusableInTouchMode = true
+                            }
                             controller?.let { this.player = it }
                         }
                     },

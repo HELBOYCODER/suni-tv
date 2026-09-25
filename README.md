@@ -2,8 +2,8 @@
 
 > Free Live TV, Radio & Webcams from around the world — on your phone, no signup, no ads.
 
-[![Build](https://github.com/3krbkbkrbrbg/famelack-android/actions/workflows/build.yml/badge.svg)](https://github.com/3krbkbkrbrbg/famelack-android/actions/workflows/build.yml)
-[![Latest release](https://img.shields.io/github/v/release/3krbkbkrbrbg/famelack-android)](https://github.com/3krbkbkrbrbg/famelack-android/releases)
+[![Build](https://github.com/HELBOYCODER/suni-tv/actions/workflows/build.yml/badge.svg)](https://github.com/HELBOYCODER/suni-tv/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/HELBOYCODER/suni-tv)](https://github.com/HELBOYCODER/suni-tv/releases)
 
 A native Android port of the global live-streaming service [famelack.com](https://famelack.com),
 powered by the public [famelack/famelack-data](https://github.com/famelack/famelack-data) dataset
@@ -21,6 +21,7 @@ powered by the public [famelack/famelack-data](https://github.com/famelack/famel
 - 🎬 Background audio playback (lockscreen / BT / notification controls)
 - 📺 YouTube Live sources play in-app
 - 🛰️ HLS streams play via ExoPlayer / Media3
+- 📺 **Android TV (v2.4.0)** — same APK, real leanback mode: runtime TV detection, D-pad focus navigation with visible highlights, top tab strip, auto-scroll to focused row, remote-friendly player controls, YouTube channels deep-link to the YouTube TV app, promo screen skipped on TV
 
 **No account. No ads. No tracking.**
 
@@ -81,12 +82,12 @@ You need **JDK 17** and the **Android SDK 34**. Then:
 ```
 
 The release APK is **auto-built by GitHub Actions** on every push to `main` and
-published to the [Releases](https://github.com/3krbkbkrbrbg/famelack-android/releases)
+published to the [Releases](https://github.com/HELBOYCODER/suni-tv/releases)
 page as a downloadable asset on `v*` tags.
 
 ## Download
 
-Grab the latest `app-release.apk` from the [Releases page](https://github.com/3krbkbkrbrbg/famelack-android/releases).
+Grab the latest `app-release.apk` from the [Releases page](https://github.com/HELBOYCODER/suni-tv/releases).
 The APK is signed with the standard Android debug key (so you can install it
 alongside future Famelack builds without uninstalling). Enable *Install unknown
 apps* in your system settings to install from the APK.

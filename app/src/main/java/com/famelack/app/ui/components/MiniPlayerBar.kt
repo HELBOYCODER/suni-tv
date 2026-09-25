@@ -1,6 +1,7 @@
 package com.famelack.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,9 +25,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,12 +49,20 @@ fun MiniPlayerBar(
     onClose: () -> Unit
 ) {
     val isPlaying by PlayerHolder.isPlayingFlow.collectAsState()
+    var focused by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
+            .scale(if (focused) 1.01f else 1f)
             .clip(RoundedCornerShape(14.dp))
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .onFocusEvent { focused = it.isFocused }
             .clickable { onClick() },
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 6.dp,
