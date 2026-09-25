@@ -10,6 +10,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -190,7 +191,11 @@ fun PlayerScreen(
     }
 
     DisposableEffect(Unit) {
+        // Keep the screen awake while a channel is on screen (video or YouTube WebView);
+        // cleared on exit so radio/background playback can still sleep the phone.
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             // Clear WebView proxy on exit to avoid leaking proxy config to other WebView users
             WebViewProxyManager.clearProxy()
@@ -782,6 +787,9 @@ private fun VideoBox(
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
+                        // Must be applied synchronously before the WebView starts loading,
+                        // otherwise the first YouTube requests bypass the tunnel.
+                        WebViewProxyManager.applyFromProxyConfig()
                         WebView(ctx).apply {
                             layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -866,6 +874,7 @@ private fun VideoBox(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
                             useController = true
+                            keepScreenOn = true
                             setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                             if (isTv) {
                                 // Accept D-pad focus/key events from the interop view on Android TV

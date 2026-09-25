@@ -79,15 +79,32 @@ object WebViewProxyManager {
     /**
      * Convenience: apply proxy based on current ProxyConfig state.
      * Call this before loading YouTube in WebView.
+     *
+     * SOCKS-only tunnels (V2RayNG, FCAE SOCKS port) are bridged through a local
+     * HTTP proxy because Chromium's ProxyController cannot speak SOCKS.
      */
     fun applyFromProxyConfig() {
-        if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.FCAE_VPN) {
-            setProxy("127.0.0.1", FcaeVpnManager.HTTP_PORT)
-        } else if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.LOCAL_HTTP) {
-            setProxy("127.0.0.1", ProxyConfig.localHttpPort)
-        } else {
+        if (!ProxyConfig.isProxyEnabled) {
             clearProxy()
+            return
         }
+        when (ProxyConfig.proxyMode) {
+            ProxyMode.FCAE_VPN -> {
+                if (HttpToSocks5Bridge.isTcpOpen(FcaeVpnManager.HTTP_PORT)) {
+                    setProxy("127.0.0.1", FcaeVpnManager.HTTP_PORT)
+                } else {
+                    bridgeThroughSocks(ProxyConfig.fcaePort)
+                }
+            }
+            ProxyMode.LOCAL_SOCKS5 -> bridgeThroughSocks(ProxyConfig.localSocksPort)
+            ProxyMode.LOCAL_HTTP -> setProxy("127.0.0.1", ProxyConfig.localHttpPort)
+            ProxyMode.URL_RELAY -> clearProxy()
+        }
+    }
+
+    private fun bridgeThroughSocks(socksPort: Int) {
+        val p = HttpToSocks5Bridge.ensureStarted(socksPort)
+        if (p > 0) setProxy("127.0.0.1", p) else clearProxy()
     }
 
     /** True if proxy is currently applied to WebView */

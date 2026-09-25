@@ -21,6 +21,8 @@ powered by the public [famelack/famelack-data](https://github.com/famelack/famel
 - 🎬 Background audio playback (lockscreen / BT / notification controls)
 - 📺 YouTube Live sources play in-app
 - 🛰️ HLS streams play via ExoPlayer / Media3
+- 🔆 **v2.4.1** — screen stays awake while a channel is playing (no more auto-lock mid-video)
+- ➡️️ **v2.4.1** — YouTube channels now tunnel through the proxy too: SOCKS-only tunnels (V2RayNG / FCAE SOCKS) are bridged to the WebView via a local HTTP→SOCKS5 bridge, applied before the player loads
 - 📺 **Android TV (v2.4.0)** — same APK, real leanback mode: runtime TV detection, D-pad focus navigation with visible highlights, top tab strip, auto-scroll to focused row, remote-friendly player controls, YouTube channels deep-link to the YouTube TV app, promo screen skipped on TV
 
 **No account. No ads. No tracking.**
